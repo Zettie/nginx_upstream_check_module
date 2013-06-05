@@ -1,6 +1,6 @@
 Name
     nginx_http_upstream_check_module - support health check with Nginx
-    -- HTML replaced with JSON output.
+    -- HTML output is replaced with JSON output in this version.
 
 Authors
     Weibin Yao(姚伟斌) *yaoweibin at gmail dot com*
