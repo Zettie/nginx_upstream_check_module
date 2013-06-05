@@ -1637,7 +1637,7 @@ ngx_http_upstream_check_status_handler(ngx_http_request_t *r)
     size_t                          buffer_size;
     ngx_int_t                       rc;
     ngx_buf_t                      *b;
-    ngx_uint_t                      i;
+    ngx_uint_t                      i, last;
     ngx_chain_t                     out;
     ngx_http_check_peer_t          *peer;
     ngx_http_check_peers_t         *peers;
@@ -1654,8 +1654,8 @@ ngx_http_upstream_check_status_handler(ngx_http_request_t *r)
         return rc;
     }
 
-    r->headers_out.content_type.len = sizeof("text/html; charset=utf-8") - 1;
-    r->headers_out.content_type.data = (u_char *) "text/html; charset=utf-8";
+    r->headers_out.content_type.len = sizeof("text/javascript") - 1;
+    r->headers_out.content_type.data = (u_char *) "text/javascript";
 
     if (r->method == NGX_HTTP_HEAD) {
         r->headers_out.status = NGX_HTTP_OK;
@@ -1691,55 +1691,42 @@ ngx_http_upstream_check_status_handler(ngx_http_request_t *r)
 
     out.buf = b;
     out.next = NULL;
-
+    last = peers->peers.nelts - 1;
+    
     b->last = ngx_snprintf(b->last, b->end - b->last,
-            "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\n"
-            "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n"
-            "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n"
-            "<head>\n"
-            "  <title>Nginx http upstream check status</title>\n"
-            "</head>\n"
-            "<body>\n"
-            "<h1>Nginx http upstream check status</h1>\n"
-            "<h2>Check upstream server number: %ui, generation: %ui</h2>\n"
-            "<table style=\"background-color:white\" cellspacing=\"0\" "
-            "       cellpadding=\"3\" border=\"1\">\n"
-            "  <tr bgcolor=\"#C0C0C0\">\n"
-            "    <th>Index</th>\n"
-            "    <th>Upstream</th>\n"
-            "    <th>Name</th>\n"
-            "    <th>Status</th>\n"
-            "    <th>Rise counts</th>\n"
-            "    <th>Fall counts</th>\n"
-            "    <th>Check type</th>\n"
-            "  </tr>\n",
-            peers->peers.nelts, ngx_http_check_shm_generation);
+            "{\"servers\": {\n"
+            "  \"total\": %ui,\n"
+            "  \"generation\": %ui,\n"
+            "  \"server\": [\n",
+            peers->peers.nelts,
+            ngx_http_check_shm_generation);
+
 
     for (i = 0; i < peers->peers.nelts; i++) {
         b->last = ngx_snprintf(b->last, b->end - b->last,
-                "  <tr%s>\n"
-                "    <td>%ui</td>\n"
-                "    <td>%V</td>\n"
-                "    <td>%V</td>\n"
-                "    <td>%s</td>\n"
-                "    <td>%ui</td>\n"
-                "    <td>%ui</td>\n"
-                "    <td>%s</td>\n"
-                "  </tr>\n",
-                peer_shm[i].down ? " bgcolor=\"#FF0000\"" : "",
+                "    {\"index\": %ui, "
+                "\"upstream\": \"%V\", "
+                "\"name\": \"%V\", "
+                "\"status\": \"%s\", "
+                "\"rise\": %ui, "
+                "\"fall\": %ui, "
+                "\"type\": \"%s\" }"
+		"%s\n",                
                 i,
                 peer[i].upstream_name,
                 &peer[i].peer_addr->name,
                 peer_shm[i].down ? "down" : "up",
                 peer_shm[i].rise_count,
                 peer_shm[i].fall_count,
-                peer[i].conf->check_type_conf->name);
+                peer[i].conf->check_type_conf->name,
+		(i == last) ? "" : ",");
     }
 
     b->last = ngx_snprintf(b->last, b->end - b->last,
-            "</table>\n"
-            "</body>\n"
-            "</html>\n");
+            "  ]\n");
+
+    b->last = ngx_snprintf(b->last, b->end - b->last,
+            "}}\n");
 
     r->headers_out.status = NGX_HTTP_OK;
     r->headers_out.content_length_n = b->last - b->pos;
